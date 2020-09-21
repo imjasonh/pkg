@@ -813,6 +813,71 @@ func TestFlatten(t *testing.T) {
 	}
 }
 
+func TestValidateKeyConflict(t *testing.T) {
+	type KV struct{ Key, Value string }
+	fieldPath := ".field.path"
+	aString := "I'm just a string"
+
+	for _, test := range []struct {
+		name     string
+		things   interface{}
+		keyField string
+		want     string
+	}{{
+		name:     "happy case; one item",
+		things:   []KV{{Key: "foo", Value: "bar"}},
+		keyField: "Key",
+	}, {
+		name:     "happy case; two unique items",
+		things:   []KV{{Key: "foo", Value: "bar"}, {Key: "bar", Value: "baz"}},
+		keyField: "Key",
+	}, {
+		name:     "happy case;  things[i] is a *struct",
+		things:   []*KV{{Key: "foo", Value: "bar"}},
+		keyField: "Key",
+	}, {
+		name:     "things[i].key is a *string",
+		things:   []struct{ Key *string }{{Key: &aString}},
+		keyField: "Key",
+	}, {
+		name: "key conflict",
+		things: []KV{
+			{Key: "foo", Value: "bar"},
+			{Key: "bar", Value: "bar"},
+			{Key: "bar", Value: "baz"},
+		},
+		keyField: "Key",
+		want:     `item 2 value for field "Key" conflicts with value for item 1 (previous value: "bar"): .field.path`,
+	}, {
+		name:     "things is not a slice",
+		things:   12345,
+		keyField: "DoesntMatter",
+		want:     "value is not a slice (int): .field.path",
+	}, {
+		name:     "things[i] is not a struct",
+		things:   []int{12345},
+		keyField: "DoesntMatter",
+		want:     "item 0 is not a struct: .field.path",
+	}, {
+		name:     "things[i].key is not a string",
+		things:   []struct{ NonString int }{{NonString: 12345}},
+		keyField: "NonString",
+		want:     `item 0 value for field "NonString" is not a string (int): .field.path`,
+	}, {
+		name:     "things[i].foo not defined",
+		things:   []KV{{Key: "foo", Value: "bar"}},
+		keyField: "DoesntExist",
+		want:     `item 0 value for field "DoesntExist" is not defined: .field.path`,
+	}} {
+		t.Run(test.name, func(t *testing.T) {
+			got := ValidateKeyConflict(fieldPath, test.things, test.keyField)
+			if got.Error() != test.want {
+				t.Errorf("\n got: %v\nwant: %v", got, test.want)
+			}
+		})
+	}
+}
+
 func makeIndex(index string) int {
 	all := strings.Split(index, ",")
 	if i, err := strconv.Atoi(all[0]); err == nil {

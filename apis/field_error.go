@@ -18,6 +18,7 @@ package apis
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -357,6 +358,63 @@ func ErrMultipleOneOf(fieldPaths ...string) *FieldError {
 		Message: "expected exactly one, got both",
 		Paths:   fieldPaths,
 	}
+}
+
+// ValidateKeyConflict returns an error if any of the elements in things has
+// the same value for the field named keyField.
+//
+// It also returns an error if things is not a slice, if any element in things
+// is not a struct, or if any field named keyField in the struct is not a
+// string or is not defined. Things can be a slice of pointers to structs, and
+// keyField can be a field of type *string.
+func ValidateKeyConflict(fieldPath string, things interface{}, keyField string) *FieldError {
+	tsv := reflect.ValueOf(things)
+	if tsv.Kind() != reflect.Slice {
+		return &FieldError{
+			Message: fmt.Sprintf("value is not a slice (%T)", things),
+			Paths:   []string{fieldPath},
+		}
+	}
+
+	seen := map[string]int{}
+	for i := 0; i < tsv.Len(); i++ {
+		tv := tsv.Index(i)
+		if tv.Kind() == reflect.Ptr {
+			tv = tv.Elem()
+		}
+		if tv.Kind() != reflect.Struct {
+			return &FieldError{
+				Message: fmt.Sprintf("item %d is not a struct", i),
+				Paths:   []string{fieldPath},
+			}
+		}
+		fv := tv.FieldByName(keyField)
+		fvk := fv.Kind()
+		if fvk == reflect.Ptr {
+			fv = fv.Elem()
+			fvk = fv.Kind()
+		}
+		if fvk == reflect.Invalid {
+			return &FieldError{
+				Message: fmt.Sprintf("item %d value for field %q is not defined", i, keyField),
+				Paths:   []string{fieldPath},
+			}
+		} else if fvk != reflect.String {
+			return &FieldError{
+				Message: fmt.Sprintf("item %d value for field %q is not a string (%s)", i, keyField, fvk),
+				Paths:   []string{fieldPath},
+			}
+		}
+		sv := fv.String()
+		if idx, found := seen[sv]; found {
+			return &FieldError{
+				Message: fmt.Sprintf("item %d value for field %q conflicts with value for item %d (previous value: %q)", i, keyField, idx, sv),
+				Paths:   []string{fieldPath},
+			}
+		}
+		seen[sv] = i
+	}
+	return nil
 }
 
 // ErrInvalidKeyName is a variadic helper method for constructing a FieldError
