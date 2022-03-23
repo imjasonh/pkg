@@ -70,10 +70,11 @@ func PreProcessReconcile(ctx context.Context, resource duckv1.KRShaped) (ok bool
 	if v, ok := resource.(apis.Validatable); validateBeforeReconciling && ok {
 		if err := v.Validate(ctx); err != nil {
 			// Mark the resource as not-(Ready/Successful).
-			manager.MarkFalse(condSet.GetTopLevelConditionType(), "Valid", fmt.Sprintf("failed validation: %v", err))
+			manager.MarkFalse(condSet.GetTopLevelConditionType(), "Invalid", fmt.Sprintf("failed validation: %v", err))
 			return false
 		} else {
-			// Otherwise, mark the resource as unknown. The reconciler is expected to overwrite this.
+			// Otherwise, reset Ready/Successful to unknown. The reconciler is expected to overwrite this.
+			// TODO: this will hide failed-generation-bump statuses from above.
 			manager.MarkUnknown(condSet.GetTopLevelConditionType(), "Valid", "validated resource")
 		}
 	}
