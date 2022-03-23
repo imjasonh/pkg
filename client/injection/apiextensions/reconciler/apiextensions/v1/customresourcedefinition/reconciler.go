@@ -229,10 +229,14 @@ func (r *reconcilerImpl) Reconcile(ctx context.Context, key string) error {
 		if resource, err = r.setFinalizerIfFinalizer(ctx, resource); err != nil {
 			return fmt.Errorf("failed to set finalizers: %w", err)
 		}
+		valid := true
 
-		// Reconcile this copy of the resource and then write back any status
-		// updates regardless of whether the reconciliation errored out.
-		reconcileEvent = do(ctx, resource)
+		if valid {
+			// Reconcile this copy of the resource and then write back any status
+			// updates regardless of whether the reconciliation errored out.
+			reconcileEvent = do(ctx, resource)
+
+		}
 
 	case reconciler.DoFinalizeKind:
 		// For finalizing reconcilers, if this resource being marked for deletion

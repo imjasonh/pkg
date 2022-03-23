@@ -18,6 +18,7 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -44,7 +45,7 @@ const (
 )
 
 // PreProcessReconcile contains logic to apply before reconciliation of a resource.
-func PreProcessReconcile(ctx context.Context, resource duckv1.KRShaped) {
+func PreProcessReconcile(ctx context.Context, resource duckv1.KRShaped) (ok bool) {
 	newStatus := resource.GetStatus()
 
 	// We may be reading a version of the object that was stored at an older version
@@ -64,6 +65,19 @@ func PreProcessReconcile(ctx context.Context, resource duckv1.KRShaped) {
 		// Reset Ready/Successful to unknown. The reconciler is expected to overwrite this.
 		manager.MarkUnknown(condSet.GetTopLevelConditionType(), failedGenerationBump, "unsuccessfully observed a new generation")
 	}
+
+	validateBeforeReconciling := true // TODO: from config.
+	if v, ok := resource.(apis.Validatable); validateBeforeReconciling && ok {
+		if err := v.Validate(ctx); err != nil {
+			// Mark the resource as not-(Ready/Successful).
+			manager.MarkFalse(condSet.GetTopLevelConditionType(), "Valid", fmt.Sprintf("failed validation: %v", err))
+			return false
+		} else {
+			// Otherwise, mark the resource as unknown. The reconciler is expected to overwrite this.
+			manager.MarkUnknown(condSet.GetTopLevelConditionType(), "Valid", "validated resource")
+		}
+	}
+	return true
 }
 
 // PostProcessReconcile contains logic to apply after reconciliation of a resource.

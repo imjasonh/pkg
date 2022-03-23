@@ -469,21 +469,24 @@ func (r *reconcilerImpl) Reconcile(ctx {{.contextContext|raw}}, key string) erro
 		if resource, err = r.setFinalizerIfFinalizer(ctx, resource); err != nil {
 			return {{.fmtErrorf|raw}}("failed to set finalizers: %w", err)
 		}
+		valid := true
 		{{if .isKRShaped}}
 		if !r.skipStatusUpdates {
-			reconciler.PreProcessReconcile(ctx, resource)
+			valid = reconciler.PreProcessReconcile(ctx, resource)
 		}
 		{{end}}
 
-		// Reconcile this copy of the resource and then write back any status
-		// updates regardless of whether the reconciliation errored out.
-		reconcileEvent = do(ctx, resource)
+		if valid {
+			// Reconcile this copy of the resource and then write back any status
+			// updates regardless of whether the reconciliation errored out.
+			reconcileEvent = do(ctx, resource)
 
-		{{if .isKRShaped}}
-		if !r.skipStatusUpdates {
-			reconciler.PostProcessReconcile(ctx, resource, original)
+			{{if .isKRShaped}}
+			if !r.skipStatusUpdates {
+				reconciler.PostProcessReconcile(ctx, resource, original)
+			}
+			{{end}}
 		}
-		{{end}}
 
 	case {{.doFinalizeKind|raw}}:
 		// For finalizing reconcilers, if this resource being marked for deletion
